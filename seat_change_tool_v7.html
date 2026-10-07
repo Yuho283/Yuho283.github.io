@@ -1,0 +1,599 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>席替えツール</title>
+<style>
+:root{--bg:#f5f6f8;--panel:#fff;--line:#c9cdd4;--text:#20242a;--muted:#69717d;--danger:#d32f2f;--warn:#b26a00;--ok:#168447;--accent:#356ae6}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI","Noto Sans JP",sans-serif}
+header{background:#20252c;color:white;padding:16px 22px}
+header h1{margin:0;font-size:22px}
+header p{margin:5px 0 0;color:#cbd1d8;font-size:13px}
+main{max-width:1500px;margin:auto;padding:16px;display:grid;grid-template-columns:360px 1fr;gap:16px}
+.panel{background:var(--panel);border:1px solid #dfe2e7;border-radius:12px;padding:14px;box-shadow:0 2px 8px #00000008}
+h2{font-size:16px;margin:0 0 12px}
+h3{font-size:14px;margin:15px 0 8px}
+.row{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+input,select,button{font:inherit}
+input,select{border:1px solid var(--line);border-radius:7px;padding:7px 8px;background:white}
+button{border:0;border-radius:7px;padding:8px 11px;background:#e9edf3;cursor:pointer}
+button:hover{filter:brightness(.97)}
+.primary{background:var(--accent);color:white}.danger{background:#fbe8e8;color:#a51f1f}
+.small{font-size:12px;color:var(--muted)}
+#students{display:flex;flex-direction:column;gap:7px;max-height:620px;overflow:auto;padding:6px 3px 6px 0;border:2px dashed transparent;border-radius:9px;transition:.12s}
+#students.drop-target{border-color:#356ae6;background:#eef4ff}
+.drop-hint{padding:6px 7px;color:#7a828d;border-radius:6px}
+#students.drop-target .drop-hint{color:#2457c4;font-weight:600}
+.student{border:1px solid #d8dce2;border-radius:9px;padding:8px;background:white;cursor:grab;display:flex;justify-content:space-between;gap:8px}
+.student.dragging{opacity:.45}.student-name{font-weight:600}.student-meta{font-size:11px;color:var(--muted);margin-top:2px}
+.badges{display:flex;gap:3px;flex-wrap:wrap;justify-content:flex-end}
+.badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;border-radius:5px;background:#edf0f5;font-size:12px;padding:0 4px}
+.badge.role{background:#fff0c8}.badge.committee{background:#e7efff}.badge.eye{background:#e9ddff}
+.toolbar{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:12px}
+#boardWrap{overflow:auto}
+#board{position:relative;display:grid;grid-template-columns:repeat(6,minmax(105px,1fr));grid-template-rows:repeat(5,125px);min-width:690px;background:white;border:3px solid #30343a}
+.seat{position:relative;border:1px dashed #b8bec7;padding:6px;min-width:0;transition:.12s;background:#fff}
+.seat.drop{background:#eaf1ff}
+.seat .seatno{position:absolute;top:3px;right:5px;font-size:10px;color:#9aa1ab}
+.card{height:100%;border:1px solid #bfc6d0;border-radius:8px;background:#fafbfd;padding:18px 7px 6px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;cursor:grab}
+.card strong{font-size:14px}.card .badges{margin-top:5px;justify-content:center}
+.empty{height:100%;display:flex;align-items:center;justify-content:center;color:#a1a7af;font-size:12px}
+.boundary-v{border-right:4px solid #20252c!important}
+.boundary-h{border-bottom:4px solid #20252c!important}
+.boundary-control{position:absolute;z-index:5;background:#fff;border:1px solid #9da4ae;color:#40464e;font-size:10px;padding:1px 4px;border-radius:4px;opacity:.65}
+.boundary-control:hover{opacity:1}
+.vcontrol{right:-12px;top:50%;transform:translateY(-50%)}.hcontrol{bottom:-12px;left:50%;transform:translateX(-50%)}
+.notice{border-radius:8px;padding:9px 10px;font-size:12px;margin-bottom:8px}
+.notice.ok{background:#e9f7ef;color:#126d3c}.notice.warn{background:#fff4df;color:#8a5600}.notice.bad{background:#fdecec;color:#a71f1f}
+#checks{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto}.check-section{border:1px solid #e1e4e9;border-radius:8px;overflow:hidden}.check-section-title{padding:8px 10px;font-size:12px;font-weight:700;background:#f4f6f8}.check-section.problem .check-section-title{background:#fdecec;color:#a71f1f}.check-section.good .check-section-title{background:#eaf7ef;color:#126d3c}.check-list{display:flex;flex-direction:column;gap:4px;padding:6px}.check{font-size:12px;padding:6px 8px;border-radius:6px;background:#f2f4f7}.check.bad{background:#fdecec}.check.ok{background:#eaf7ef}.check-empty{font-size:12px;padding:8px;color:#69717d}
+.modal{position:fixed;inset:0;background:#0007;display:none;align-items:center;justify-content:center;padding:15px;z-index:20}
+.modal.show{display:flex}.modalbox{background:white;border-radius:12px;padding:18px;width:min(620px,100%);max-height:90vh;overflow:auto}
+.formgrid{display:grid;grid-template-columns:1fr 1fr;gap:9px}.formgrid .full{grid-column:1/-1}
+label{font-size:12px;color:#4e5660;display:flex;flex-direction:column;gap:4px}
+#jsonBox{width:100%;height:220px;font-family:monospace;font-size:12px}
+@media(max-width:900px){main{grid-template-columns:1fr}.panel:first-child{order:1}.boardPanel{order:0}.formgrid{grid-template-columns:1fr}}
+
+.boundary-mode .seat{cursor:pointer}
+.boundary-mode .boundary-control{display:none}
+.boundary-mode .seat:hover{background:#eef4ff}
+.group-label{position:absolute;transform:translate(-50%,-50%);font-size:52px;line-height:1;font-weight:800;color:#56606b;opacity:.12;pointer-events:none;z-index:4;user-select:none;text-shadow:0 1px 2px #fff;white-space:nowrap}.seat>.card,.seat>.empty{position:relative;z-index:2}.seat>.seatno{z-index:3}.seat>.boundary-control{z-index:5}
+.crypto-note{background:#edf5ff;border:1px solid #c9dcff;color:#254c8f;border-radius:8px;padding:9px;font-size:12px;margin-top:8px}
+
+/* iPad縦画面 */
+@media (max-width:900px) and (orientation:portrait){
+  header{padding:12px 14px}
+  header h1{font-size:20px}
+  header p{font-size:12px}
+  main{display:flex;flex-direction:column;padding:8px;gap:8px}
+  .boardPanel{order:0;padding:10px}
+  main>.panel:first-child{order:1}
+  .boardPanel .toolbar{margin-bottom:7px;gap:5px}
+  .boardPanel .toolbar button{padding:7px 8px;font-size:12px}
+  #boardWrap{width:100%;overflow:hidden}
+  #board{width:100%;min-width:0;grid-template-columns:repeat(6,minmax(0,1fr));grid-template-rows:repeat(5,minmax(86px,1fr));height:min(68vh,650px)}
+  .seat{padding:3px}
+  .card{padding:15px 3px 4px;border-radius:6px}
+  .card strong{font-size:13px;word-break:break-word}
+  .badge{min-width:18px;height:18px;font-size:11px;padding:0 3px}
+  .group-label{font-size:48px}
+  .boundary-control{font-size:9px;padding:1px 3px}
+  #students{max-height:42vh}
+  .panel{border-radius:10px}
+}
+
+#printHeader{display:none}
+@media print{
+  @page{size:A4 portrait;margin:10mm}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{background:white}
+  header{display:none!important}
+  #printHeader{display:block;text-align:center;margin-bottom:7mm}
+  .print-class{font-size:25pt;font-weight:800;letter-spacing:.08em;margin-bottom:5mm}
+  .blackboard{width:88%;height:24mm;margin:0 auto;background:#26382d;border:3px solid #7b6347;border-radius:3px;color:white;display:flex;align-items:center;justify-content:center;font-size:20pt;font-weight:800;letter-spacing:.2em;box-shadow:0 2px 0 #5b4734}
+  main{display:block;padding:0;max-width:none}
+  main>.panel:first-child{display:none!important}
+  .boardPanel{display:block!important;border:0;box-shadow:none;padding:0}
+  .boardPanel>.toolbar,.boardPanel>#boundaryHelp,.boardPanel>#summary,.boardPanel>p,.boardPanel>h2,.boardPanel>#checks{display:none!important}
+  #boardWrap{overflow:visible!important;width:100%}
+  #board{width:100%;min-width:0;height:auto;grid-template-columns:repeat(6,1fr);grid-template-rows:repeat(5,30mm);border:2px solid #20252c}
+  .seat{padding:2mm;border:1px solid #9aa1ab}
+  .boundary-v{border-right:3px solid #20252c!important}
+  .boundary-h{border-bottom:3px solid #20252c!important}
+  .boundary-control{display:none!important}
+  .seatno{display:none!important}
+  .card{padding:3mm 1mm 1mm;border:1px solid #7f8791;border-radius:2mm}
+  .card strong{font-size:11pt}
+  .badge{font-size:8pt;min-width:15px;height:15px;padding:0 2px}
+  .group-label{font-size:38pt;opacity:.11}
+  .empty{font-size:9pt}
+}
+</style>
+</head>
+<body>
+<header><h1>席替えツール</h1><p>30席・7班／生徒カードをドラッグして配置。班境界・役職・委員会・目が悪い人を管理できます。 ver.7</p></header>
+<div id="printHeader"><div class="print-class">1年4組</div><div class="blackboard">黒板</div></div>
+<main>
+<section class="panel">
+  <h2>生徒登録</h2>
+  <div class="row">
+    <button class="primary" onclick="openStudent()">＋ 生徒を追加</button>
+    <button onclick="autoArrange()">自動配置</button>
+  </div>
+  <p class="small">登録した生徒カードを右側の席へドラッグしてください。</p>
+  <div id="students" class="student-dropzone">
+  <div id="studentDropHint" class="small drop-hint">ここに生徒カードをドロップすると、座席から外せます</div>
+</div>
+  <h3>データ</h3>
+  <div class="row">
+    <button onclick="saveData()">保存</button><button onclick="loadData()">読み込み</button>
+    <button onclick="exportJSON()">JSON書き出し</button><button onclick="importJSON()">JSON読み込み</button>
+    <button class="primary" onclick="exportEncrypted()">🔒 暗号化して書き出し</button>
+    <button onclick="importEncrypted()">🔓 暗号化ファイルを読み込み</button>
+    <button class="danger" onclick="resetAll()">全消去</button>
+  </div>
+  <p class="small">暗号化ファイルはパスワードから鍵を生成して暗号化します。別のブラウザ・別のPCでも、同じファイルとパスワードがあれば復号できます。パスワードは保存しません。</p>
+</section>
+
+<section class="panel boardPanel">
+  <div class="toolbar">
+    <button onclick="runChecks()">制約チェック</button>
+    <button id="undoBtn" onclick="undo()" title="直前の変更を元に戻す">↶ 元に戻す</button>
+    <button id="redoBtn" onclick="redo()" title="元に戻した変更をやり直す">↷ やり直す</button>
+    <button onclick="clearSeats()">座席を空にする</button>
+    <button onclick="resetBoundaries()">班境界を初期化</button>
+    <button id="boundaryModeBtn" class="primary" onclick="toggleBoundaryMode()">班境界を編集</button>
+    <button onclick="exportPDF()">🖨️ PDFを書き出す</button>
+  </div>
+  <div id="boundaryHelp" class="notice warn" style="display:none">
+    <b>班境界の編集モード</b>：席と席の間にある太い線をクリックすると、班境界を追加／削除できます。
+    現在の班番号も表示されます。もう一度ボタンを押すと編集モードを終了します。
+  </div>
+  <div id="summary" class="notice"></div>
+  <div id="boardWrap"><div id="board"></div></div>
+  <p class="small">太い線が班の境界です。境界線上の「線」を押すと、班境界を追加／削除できます。</p>
+  <h2>制約チェック</h2>
+  <div id="checks"></div>
+</section>
+</main>
+
+<div id="modal" class="modal"><div class="modalbox">
+<h2 id="modalTitle">生徒を追加</h2>
+<div class="formgrid">
+<label>名前<input id="fName" maxlength="30"></label>
+<label>役職<select id="fRole">
+<option value="">なし</option><option value="学級委員">学級委員</option><option value="議長">議長</option><option value="班長">班長</option><option value="教科係">教科係</option><option value="書記">書記</option>
+</select></label>
+<label>委員会<select id="fCommittee">
+<option value="">なし</option><option>情報</option><option>図書</option><option>保健</option><option>整美</option><option>合唱</option><option>学習</option><option>給食</option><option>生活</option>
+</select></label>
+<label class="full"><span>目が悪い</span><span><input id="fEye" type="checkbox"> 👓 マークを表示</span></label>
+</div>
+<div class="row" style="justify-content:flex-end;margin-top:15px"><button onclick="closeModal()">キャンセル</button><button class="primary" onclick="submitStudent()">保存</button></div>
+</div></div>
+
+<div id="jsonModal" class="modal"><div class="modalbox">
+<h2>JSONデータ</h2><textarea id="jsonBox"></textarea>
+<div class="row" style="justify-content:flex-end;margin-top:10px"><button onclick="closeJson()">閉じる</button><button class="primary" onclick="applyJSON()">読み込む</button></div>
+</div></div>
+
+<script>
+const committees=["情報","図書","保健","整美","合唱","学習","給食","生活"];
+let students=[];
+let seats=Array(30).fill(null);
+let boundariesV=new Set(), boundariesH=new Set();
+let editId=null;
+
+function uid(){return "s"+Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
+let boundaryMode=false;
+let cryptoActionMode="";
+let cryptoFileData=null;
+let undoStack=[];
+let redoStack=[];
+let historyReady=false;
+function cloneState(x){return JSON.parse(JSON.stringify(x))}
+function recordHistory(){if(!historyReady)return;undoStack.push(cloneState(state()));if(undoStack.length>100)undoStack.shift();redoStack=[];updateHistoryUI()}
+function updateHistoryUI(){const u=document.getElementById("undoBtn"),r=document.getElementById("redoBtn");if(u)u.disabled=undoStack.length===0;if(r)r.disabled=redoStack.length===0}
+function undo(){if(!undoStack.length)return;redoStack.push(cloneState(state()));const prev=undoStack.pop();applyState(prev,false);updateHistoryUI()}
+function redo(){if(!redoStack.length)return;undoStack.push(cloneState(state()));const next=redoStack.pop();applyState(next,false);updateHistoryUI()}
+
+function init(){
+  resetBoundaries(false);
+  renderStudents(); renderBoard(); runChecks();
+  const saved=localStorage.getItem("seatToolV1");
+  if(saved){try{applyState(JSON.parse(saved),false)}catch(e){}}
+  undoStack=[];redoStack=[];historyReady=true;updateHistoryUI();
+}
+function resetBoundaries(record=true){
+  if(record)recordHistory();
+  boundariesV=new Set();
+  boundariesH=new Set();
+  // 30席を行優先で7班に分割：
+  // 1班=5席、2班=5席、3～7班=4席
+  // 境界をセル間の「辺」として保持。
+  [4,9,13,17,21,25].forEach(idx=>{
+    const r=Math.floor(idx/6),c=idx%6;
+    if(c<5) boundariesV.add(c+","+r);
+    else boundariesH.add(c+","+r);
+  });
+  boundaryMode=false;
+  updateBoundaryModeUI();
+  renderBoard();
+}
+function toggleBoundaryMode(){
+  boundaryMode=!boundaryMode;
+  updateBoundaryModeUI();
+}
+function updateBoundaryModeUI(){
+  const b=document.getElementById("boundaryModeBtn");
+  const h=document.getElementById("boundaryHelp");
+  const board=document.getElementById("board");
+  if(b)b.textContent=boundaryMode?"編集モードを終了":"班境界を編集";
+  if(b)b.className=boundaryMode?"":"primary";
+  if(h)h.style.display=boundaryMode?"block":"none";
+  if(board)board.classList.toggle("boundary-mode",boundaryMode);
+}
+function renderStudents(){
+  const box=document.getElementById("students");
+  box.innerHTML='<div id="studentDropHint" class="small drop-hint">ここに生徒カードをドロップすると、座席から外せます</div>';
+
+  // 生徒一覧そのものを「座席から外す」ドロップ先にする。
+  box.ondragover=e=>{
+    e.preventDefault();
+    box.classList.add("drop-target");
+    if(e.dataTransfer)e.dataTransfer.dropEffect="move";
+  };
+  box.ondragleave=e=>{
+    if(!box.contains(e.relatedTarget))box.classList.remove("drop-target");
+  };
+  box.ondrop=e=>{
+    e.preventDefault();
+    box.classList.remove("drop-target");
+    const id=e.dataTransfer.getData("text/plain");
+    if(!id)return;
+    const idx=seats.indexOf(id);
+    if(idx>=0){
+      recordHistory();
+      seats[idx]=null;
+      renderStudents();
+      renderBoard();
+      runChecks();
+      autoSave();
+    }
+  };
+
+  students.forEach(s=>{
+    const el=document.createElement("div");el.className="student";el.draggable=true;el.dataset.id=s.id;
+    el.innerHTML=`<div><div class="student-name">${esc(s.name)}</div><div class="student-meta">${esc(meta(s))}</div></div><div class="badges">${badges(s)}</div>`;
+    el.addEventListener("dragstart",e=>{
+      e.dataTransfer.setData("text/plain",s.id);
+      e.dataTransfer.effectAllowed="move";
+      el.classList.add("dragging");
+    });
+    el.addEventListener("dragend",()=>el.classList.remove("dragging"));
+    el.addEventListener("dblclick",()=>openStudent(s.id));
+    box.appendChild(el);
+  });
+}
+function renderBoard(){
+  const b=document.getElementById("board"); b.innerHTML="";
+  for(let i=0;i<30;i++){
+    const r=Math.floor(i/6),c=i%6,cell=document.createElement("div");
+    cell.className="seat"; cell.dataset.i=i;
+    if(boundariesV.has(c+","+r))cell.classList.add("boundary-v");
+    if(boundariesH.has(c+","+r))cell.classList.add("boundary-h");
+
+    const sn=document.createElement("span");
+    sn.className="seatno"; sn.textContent=i+1; cell.appendChild(sn);
+
+    // In normal mode the small controls remain available.
+    if(!boundaryMode){
+      if(c<5){
+        let x=document.createElement("button"); x.className="boundary-control vcontrol";
+        x.textContent=boundariesV.has(c+","+r)?"境界":"＋";
+        x.title="縦の班境界を切替";
+        x.onclick=e=>{e.stopPropagation();toggleV(c,r)};
+        cell.appendChild(x);
+      }
+      if(r<4){
+        let x=document.createElement("button"); x.className="boundary-control hcontrol";
+        x.textContent=boundariesH.has(c+","+r)?"境界":"＋";
+        x.title="横の班境界を切替";
+        x.onclick=e=>{e.stopPropagation();toggleH(c,r)};
+        cell.appendChild(x);
+      }
+    }
+
+    cell.addEventListener("click",e=>{
+      if(!boundaryMode)return;
+      // Click near an edge of a cell to toggle the corresponding boundary.
+      const rect=cell.getBoundingClientRect();
+      const dx=e.clientX-rect.left, dy=e.clientY-rect.top;
+      const edge=14;
+      if(c<5 && rect.width-dx<edge){toggleV(c,r);return}
+      if(r<4 && rect.height-dy<edge){toggleH(c,r);return}
+      if(c>0 && dx<edge){toggleV(c-1,r);return}
+      if(r>0 && dy<edge){toggleH(c,r-1);return}
+    });
+
+    cell.addEventListener("dragover",e=>{e.preventDefault();cell.classList.add("drop")});
+    cell.addEventListener("dragleave",()=>cell.classList.remove("drop"));
+    cell.addEventListener("drop",e=>{
+      e.preventDefault();cell.classList.remove("drop");
+      place(e.dataTransfer.getData("text/plain"),i)
+    });
+
+    const sid=seats[i],s=students.find(x=>x.id===sid);
+    if(s){
+      const card=document.createElement("div"); card.className="card"; card.draggable=true; card.dataset.id=s.id;
+      card.innerHTML=`<strong>${esc(s.name)}</strong><div class="badges">${badges(s)}</div>`;
+      card.addEventListener("dragstart",e=>e.dataTransfer.setData("text/plain",s.id));
+      card.addEventListener("dblclick",e=>{e.stopPropagation();openStudent(s.id)});
+      cell.appendChild(card);
+    }else{
+      let e=document.createElement("div");e.className="empty";e.textContent="空席";cell.appendChild(e)
+    }
+    b.appendChild(cell);
+  }
+
+  // 班の連結範囲ごとに、中央付近へ大きな半透明の班番号を重ねる。
+  // 生徒カードより背面に置き、pointer-events:none にして操作を邪魔しない。
+  const groups=groupComponents();
+  const boardRect=b.getBoundingClientRect();
+  groups.forEach((cells,gi)=>{
+    // 班の中心に最も近い「実際の座席」を選ぶ。これならL字型などでも
+    // 班の外側へ数字が飛び出さず、必ずその班のセル内に収まる。
+    const centers=cells.map(idx=>{
+      const el=b.querySelector(`.seat[data-i="${idx}"]`);
+      if(!el)return null;
+      const r=el.getBoundingClientRect();
+      return {idx,x:r.left-boardRect.left+r.width/2,y:r.top-boardRect.top+r.height/2};
+    }).filter(Boolean);
+    if(!centers.length)return;
+    const cx=centers.reduce((a,v)=>a+v.x,0)/centers.length;
+    const cy=centers.reduce((a,v)=>a+v.y,0)/centers.length;
+    const centerCell=centers.reduce((best,v)=>
+      Math.hypot(v.x-cx,v.y-cy)<Math.hypot(best.x-cx,best.y-cy)?v:best
+    );
+    const gl=document.createElement("div");
+    gl.className="group-label";
+    gl.textContent=gi+1;
+    gl.style.left=centerCell.x+"px";
+    gl.style.top=centerCell.y+"px";
+    b.appendChild(gl);
+  });
+  updateBoundaryModeUI();
+}
+function toggleV(c,r){recordHistory();let k=c+","+r;boundariesV.has(k)?boundariesV.delete(k):boundariesV.add(k);renderBoard();runChecks();autoSave()}
+function toggleH(c,r){recordHistory();let k=c+","+r;boundariesH.has(k)?boundariesH.delete(k):boundariesH.add(k);renderBoard();runChecks();autoSave()}
+function place(id,i){
+  recordHistory();
+  const old=seats.indexOf(id);if(old>=0)seats[old]=null;
+  const displaced=seats[i];seats[i]=id;if(displaced&&old>=0)seats[old]=displaced;
+  renderBoard();runChecks();autoSave()
+}
+function badges(s){
+ let a=[];
+ if(s.role==="学級委員")a.push(`<span class="badge role">🏫</span>`);
+ else if(s.role==="議長")a.push(`<span class="badge role">📢</span>`);
+ else if(s.role==="班長")a.push(`<span class="badge role">👑</span>`);
+ if(s.committee)a.push(`<span class="badge committee">${esc(s.committee)}</span>`);
+ if(s.eye)a.push(`<span class="badge eye">👓</span>`);
+ return a.join("")
+}
+function meta(s){return [s.role,s.committee].filter(Boolean).join(" / ")||"役割未設定"}
+function openStudent(id=null){
+ editId=id;let s=id?students.find(x=>x.id===id):null;
+ document.getElementById("modalTitle").textContent=s?"生徒を編集":"生徒を追加";
+ document.getElementById("fName").value=s?.name||"";
+ document.getElementById("fRole").value=s?.role||"";document.getElementById("fCommittee").value=s?.committee||"";
+ document.getElementById("fEye").checked=!!s?.eye;document.getElementById("modal").classList.add("show")
+}
+function closeModal(){document.getElementById("modal").classList.remove("show");editId=null}
+function submitStudent(){
+ const name=document.getElementById("fName").value.trim();if(!name){alert("名前を入力してください");return}
+ let s=editId?students.find(x=>x.id===editId):{id:uid()};
+ s.name=name;s.role=document.getElementById("fRole").value;
+ s.committee=document.getElementById("fCommittee").value;s.eye=document.getElementById("fEye").checked;
+ if(!editId&&students.length>=30){alert("30人まで登録できます");return}
+ recordHistory();
+ if(!editId)students.push(s);closeModal();renderStudents();renderBoard();runChecks();autoSave()
+}
+function runChecks(){
+ const c=document.getElementById("checks");c.innerHTML="";
+ const bads=[],goods=[];
+ const add=(ok,msg)=>{(ok?goods:bads).push(msg)};
+ add(students.length===30,`登録人数：${students.length}/30`);
+ const placed=seats.filter(Boolean).length;add(placed===students.length,`配置済み：${placed}/${students.length}`);
+ const classReps=students.filter(s=>s.role==="学級委員").length;
+ add(classReps===2,`学級委員：${classReps}人（2人）`);
+ const chair=students.filter(s=>s.role==="議長").length;
+ add(chair===1,`議長：${chair}人（1人）`);
+ const otherLeaders=students.filter(s=>s.role==="班長").length;
+ add(otherLeaders===4,`「その他の班長」：${otherLeaders}/4人`);
+ const committeesUsed=[...new Set(students.map(s=>s.committee).filter(Boolean))];
+ committeesUsed.forEach(cm=>{
+   const ids=students.filter(s=>s.committee===cm).map(s=>s.id);
+   const groups=new Set(ids.map(id=>groupOf(seats.indexOf(id))).filter(x=>x>0));
+   add(groups.size<=1,`${cm}委員会：${groups.size<=1?"同じ班":"複数班に分散"}`);
+ });
+ const gs=groupSizes();
+ const five=gs.filter(n=>n===5).length;
+ const four=gs.filter(n=>n===4).length;
+ const groupCountOk=gs.length===7;
+ const sizePatternOk=groupCountOk && five===2 && four===5 && gs.every(n=>n===4||n===5);
+ add(sizePatternOk,`班人数：5人班 ${five}/2、4人班 ${four}/5（全${gs.length}班）`);
+ students.filter(s=>["学級委員","議長"].includes(s.role)).forEach(s=>add(!s.committee,`${s.name}：学級委員・議長は委員会に所属しない`));
+ students.filter(s=>s.role==="班長").forEach(s=>add(!!s.committee,`${s.name}：班長は委員会を選択`));
+ const badSection=document.createElement("div");badSection.className="check-section problem";
+ const bt=document.createElement("div");bt.className="check-section-title";bt.textContent=bads.length?`⚠ 未達の制約・要確認（${bads.length}件）`:`✓ 未達の制約はありません`;
+ const bl=document.createElement("div");bl.className="check-list";
+ if(bads.length){bads.forEach(msg=>{const d=document.createElement("div");d.className="check bad";d.textContent="⚠ "+msg;bl.appendChild(d)})}else{const d=document.createElement("div");d.className="check-empty";d.textContent="すべての制約を満たしています。";bl.appendChild(d)}
+ badSection.appendChild(bt);badSection.appendChild(bl);c.appendChild(badSection);
+ const goodSection=document.createElement("details");goodSection.className="check-section good";
+ const gt=document.createElement("summary");gt.className="check-section-title";gt.textContent=`✓ 満たしている制約（${goods.length}件）`;
+ const gl=document.createElement("div");gl.className="check-list";
+ goods.forEach(msg=>{const d=document.createElement("div");d.className="check ok";d.textContent="✓ "+msg;gl.appendChild(d)});
+ goodSection.appendChild(gt);goodSection.appendChild(gl);c.appendChild(goodSection);
+ const msg=document.getElementById("summary");
+ msg.className="notice "+(bads.length?"bad":"ok");msg.textContent=bads.length?`⚠ ${bads.length}件の制約・配置を確認してください。`:`✓ すべての制約を満たしています。`;
+ updateHistoryUI();
+}
+function groupComponents(){
+ const seen=new Set(), comps=[];
+ for(let i=0;i<30;i++)if(!seen.has(i)){
+   const q=[i];seen.add(i);let arr=[];
+   while(q.length){let x=q.pop();arr.push(x);let r=Math.floor(x/6),c=x%6;
+     const ns=[];
+     if(c>0&&!boundariesV.has((c-1)+","+r))ns.push(x-1);
+     if(c<5&&!boundariesV.has(c+","+r))ns.push(x+1);
+     if(r>0&&!boundariesH.has(c+","+(r-1)))ns.push(x-6);
+     if(r<4&&!boundariesH.has(c+","+r))ns.push(x+6);
+     ns.forEach(n=>{if(!seen.has(n)){seen.add(n);q.push(n)}})
+   }
+   comps.push(arr.sort((a,b)=>a-b));
+ }
+ return comps;
+}
+function groupOf(index){
+ if(index<0)return 0;
+ const comps=groupComponents();
+ const ci=comps.findIndex(a=>a.includes(index));
+ return ci+1;
+}
+function groupSizes(){return groupComponents().map(a=>a.length)}
+function clearSeats(){seats=Array(30).fill(null);renderBoard();runChecks();autoSave()}
+function autoArrange(){
+ recordHistory();
+ // Greedy: place committee members together, then roles, filling target groups.
+ seats=Array(30).fill(null);
+ // Use current geometric groups and capacities. If boundaries are malformed, simply fill sequentially.
+ const groups={};for(let i=0;i<30;i++){let g=groupOf(i);(groups[g]??=[]).push(i)}
+ const ordered=Object.keys(groups).sort((a,b)=>groups[b].length-groups[a].length);
+ const targets=students.slice();
+ const committeeGroups={};
+ const assigned=new Map();
+ // Assign committee blocks to groups with enough free capacity.
+ const cms=[...new Set(targets.map(s=>s.committee).filter(Boolean))];
+ const free=new Map(ordered.map(g=>[+g,groups[g].slice()]));
+ for(const cm of cms){
+   const list=targets.filter(s=>s.committee===cm&&!["学級委員","議長"].includes(s.role));
+   let g=ordered.find(x=>free.get(+x).length>=list.length);
+   if(g){list.forEach(s=>{const pos=free.get(+g).shift();seats[pos]=s.id;assigned.set(s.id,1)})}
+ }
+ // Put remaining students into remaining seats, trying role mix.
+ const remaining=targets.filter(s=>!assigned.has(s.id));
+ let pos=[];free.forEach(a=>pos.push(...a));
+ remaining.forEach((s,k)=>{if(pos[k]!=null)seats[pos[k]]=s.id});
+ renderBoard();runChecks();autoSave();
+}
+function saveData(){autoSave();alert("保存しました。")}
+function autoSave(){localStorage.setItem("seatToolV1",JSON.stringify(state()))}
+function loadData(){const x=localStorage.getItem("seatToolV1");if(!x){alert("保存データがありません");return}try{applyState(JSON.parse(x));alert("読み込みました")}catch(e){alert("保存データを読み込めません")}}
+function state(){return {students,seats,boundariesV:[...boundariesV],boundariesH:[...boundariesH]}}
+function applyState(x,record=true){if(record)recordHistory();students=x.students||[];seats=x.seats||Array(30).fill(null);boundariesV=new Set(x.boundariesV||[]);boundariesH=new Set(x.boundariesH||[]);renderStudents();renderBoard();runChecks();updateHistoryUI()}
+function exportJSON(){document.getElementById("jsonBox").value=JSON.stringify(state(),null,2);document.getElementById("jsonModal").classList.add("show")}
+function importJSON(){document.getElementById("jsonBox").value="";document.getElementById("jsonModal").classList.add("show")}
+function applyJSON(){try{applyState(JSON.parse(document.getElementById("jsonBox").value));autoSave();closeJson()}catch(e){alert("JSONが正しくありません")}}
+function closeJson(){document.getElementById("jsonModal").classList.remove("show")}
+function resetAll(){if(confirm("すべての登録・配置を消去しますか？")){recordHistory();students=[];seats=Array(30).fill(null);resetBoundaries(false);localStorage.removeItem("seatToolV1");renderStudents();renderBoard();runChecks();updateHistoryUI()}}
+function esc(s){return String(s??"").replace(/[&<>"']/g,m=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[m]))}
+
+function bytesToB64(bytes){let bin="";for(const b of bytes)bin+=String.fromCharCode(b);return btoa(bin)}
+function b64ToBytes(s){const bin=atob(s);const a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a}
+function utf8(s){return new TextEncoder().encode(s)}
+function fromUtf8(a){return new TextDecoder().decode(a)}
+async function deriveKey(password,salt){
+  const base=await crypto.subtle.importKey("raw",utf8(password),"PBKDF2",false,["deriveKey"]);
+  return crypto.subtle.deriveKey({name:"PBKDF2",salt,iterations:250000,hash:"SHA-256"},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+}
+async function encryptState(password){
+  if(!window.crypto?.subtle)throw new Error("このブラウザではWeb Crypto APIが利用できません。");
+  const salt=crypto.getRandomValues(new Uint8Array(16));
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const key=await deriveKey(password,salt);
+  const plain=utf8(JSON.stringify(state()));
+  const cipher=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},key,plain));
+  return {format:"SeatChangeToolEncrypted",version:3,kdf:"PBKDF2-SHA-256",iterations:250000,cipher:"AES-256-GCM",salt:bytesToB64(salt),iv:bytesToB64(iv),data:bytesToB64(cipher)};
+}
+async function decryptState(obj,password){
+  if(!window.crypto?.subtle)throw new Error("このブラウザではWeb Crypto APIが利用できません。");
+  if(obj.format!=="SeatChangeToolEncrypted")throw new Error("このファイルは席替えツールの暗号化データではありません。");
+  const salt=b64ToBytes(obj.salt),iv=b64ToBytes(obj.iv),data=b64ToBytes(obj.data);
+  const key=await deriveKey(password,salt);
+  const plain=await crypto.subtle.decrypt({name:"AES-GCM",iv},key,data);
+  return JSON.parse(fromUtf8(new Uint8Array(plain)));
+}
+function openCrypto(mode){
+  document.getElementById("cryptoFile").value="";
+  cryptoActionMode=mode;
+  document.getElementById("cryptoPassword").value="";
+  document.getElementById("cryptoPassword2").value="";
+  document.getElementById("cryptoPassword2Wrap").style.display=mode==="export"?"flex":"none";
+  document.getElementById("cryptoTitle").textContent=mode==="export"?"暗号化して書き出し":"暗号化ファイルを読み込み";
+  document.getElementById("cryptoText").textContent=mode==="export"
+    ?"パスワードを設定してください。パスワードを忘れると復号できません。"
+    :"暗号化時に設定したパスワードを入力してください。";
+  document.getElementById("cryptoAction").textContent=mode==="export"?"暗号化して保存":"ファイルを選択";
+  document.getElementById("cryptoAction").onclick=mode==="export"?doEncryptedExport:chooseEncryptedFile;
+  document.getElementById("cryptoModal").classList.add("show");
+}
+function closeCrypto(){document.getElementById("cryptoModal").classList.remove("show");cryptoFileData=null}
+function exportEncrypted(){openCrypto("export")}
+function importEncrypted(){openCrypto("import")}
+async function doEncryptedExport(){
+  const p=document.getElementById("cryptoPassword").value;
+  const p2=document.getElementById("cryptoPassword2").value;
+  if(p.length<8){alert("パスワードは8文字以上にしてください。");return}
+  if(p!==p2){alert("パスワードが一致しません。");return}
+  try{
+    const obj=await encryptState(p);
+    const blob=new Blob([JSON.stringify(obj)],{type:"application/json"});
+    const a=document.createElement("a");a.href=URL.createObjectURL(blob);
+    a.download="seat-change-encrypted.seatenc";a.click();URL.revokeObjectURL(a.href);
+    closeCrypto();
+  }catch(e){alert("暗号化に失敗しました："+e.message)}
+}
+function chooseEncryptedFile(){
+  const input=document.getElementById("cryptoFile");
+  input.onchange=async()=>{
+    const file=input.files[0]; if(!file)return;
+    try{cryptoFileData=JSON.parse(await file.text())}catch(e){alert("暗号化ファイルを読み込めません。");return}
+    document.getElementById("cryptoAction").textContent="復号して読み込む";
+    document.getElementById("cryptoAction").onclick=doEncryptedImport;
+    document.getElementById("cryptoText").textContent="ファイルを読み込みました。パスワードを入力して復号してください。";
+  };
+  input.click();
+}
+async function doEncryptedImport(){
+  if(!cryptoFileData){chooseEncryptedFile();return}
+  const p=document.getElementById("cryptoPassword").value;
+  if(!p){alert("パスワードを入力してください。");return}
+  try{
+    const data=await decryptState(cryptoFileData,p);
+    applyState(data);autoSave();closeCrypto();alert("暗号化データを復号して読み込みました。");
+  }catch(e){alert("復号できませんでした。パスワードが違うか、データが壊れています。")}
+}
+
+function exportPDF(){
+  // 印刷専用CSSでA4縦のPDFレイアウトに切り替える。
+  // iPadでは共有/印刷画面から「PDFとして保存」を選択できます。
+  window.print();
+}
+
+init();
+</script>
+
+<div id="cryptoModal" class="modal"><div class="modalbox">
+<h2 id="cryptoTitle">暗号化</h2>
+<p id="cryptoText" class="small"></p>
+<label>パスワード<input id="cryptoPassword" type="password" autocomplete="new-password"></label>
+<label id="cryptoPassword2Wrap" style="margin-top:9px">パスワード（確認）<input id="cryptoPassword2" type="password" autocomplete="new-password"></label>
+<input id="cryptoFile" type="file" accept=".seatenc,.json" style="display:none">
+<div class="row" style="justify-content:flex-end;margin-top:15px">
+<button onclick="closeCrypto()">キャンセル</button><button class="primary" id="cryptoAction">実行</button>
+</div>
+</div></div>
+</body>
+</html>
